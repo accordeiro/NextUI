@@ -228,7 +228,7 @@ int State_read(void) { // from picoarch
 
 	state_rzfile = rzipstream_open(filename, RETRO_VFS_FILE_ACCESS_READ);
 	if(!state_rzfile) {
-	  if (state_slot!=8) { // st8 is a default state in MiniUI and may not exist, that's okay
+	  if (state_slot!=DEFAULT_STATE_SLOT) { // DEFAULT_STATE_SLOT is a bundled default state and may not exist, that's okay
 		LOG_error("Error opening state file: %s (%s)\n", filename, strerror(errno));
 	  }
 	  goto error;
@@ -264,7 +264,7 @@ error:
 #else
 	FILE *state_file = fopen(filename, "r");
 	if (!state_file) {
-		if (state_slot!=8) { // st8 is a default state in MiniUI and may not exist, that's okay
+		if (state_slot!=DEFAULT_STATE_SLOT) { // DEFAULT_STATE_SLOT is a bundled default state and may not exist, that's okay
 			LOG_error("Error opening state file: %s (%s)\n", filename, strerror(errno));
 		}
 		goto error;

@@ -114,7 +114,7 @@ void MSG_quit(void) {
 ///////////////////////////////////////
 
 #define MENU_ITEM_COUNT 5
-#define MENU_SLOT_COUNT 8
+#define MENU_SLOT_COUNT 100
 
 enum {
 	ITEM_CONT,
@@ -1554,8 +1554,8 @@ static void Menu_scale(SDL_Surface* src, SDL_Surface* dst) {
 
 void Menu_initState(void) {
 	if (exists(menu.slot_path)) menu.slot = getInt(menu.slot_path);
-	if (menu.slot==8) menu.slot = 0;
-	
+	else menu.slot = MENU_SLOT_COUNT - 1; // first save wraps to 0 (displayed as "1/100")
+
 	menu.save_exists = 0;
 	menu.preview_exists = 0;
 }
@@ -1647,6 +1647,13 @@ void Menu_screenshot(void) {
 }
 void Menu_saveState(void) {
 	// LOG_info("Menu_saveState\n");
+
+	// advance to the next slot before writing — every save lands in a fresh slot,
+	// wrapping cyclically (display "100" -> "1"). Applies to the in-menu Save action
+	// and every shortcut path (quick save, save-and-quit, game switcher) since they
+	// all route through here.
+	int prev_slot = menu.slot;
+	menu.slot = (menu.slot + 1) % MENU_SLOT_COUNT;
 	Menu_updateState();
 	
 	if (menu.total_discs) {
@@ -1675,12 +1682,20 @@ void Menu_saveState(void) {
 	state_slot = menu.slot;
 	putInt(menu.slot_path, menu.slot);
 	int success = State_write();
-	
+	int attempted_slot = menu.slot;
+
+	// a blocked write (e.g. RetroAchievements hardcore mode) shouldn't burn the slot
+	if (!success) {
+		menu.slot = prev_slot;
+		state_slot = prev_slot;
+		putInt(menu.slot_path, prev_slot);
+	}
+
 	// Show notification if enabled
 	if (CFG_getNotifyManualSave()) {
 		char msg[NOTIFICATION_MAX_MESSAGE];
-		// User-facing slots are 1-8 (internal 0-7)
-		snprintf(msg, sizeof(msg), success ? "State Saved - Slot %d" : "Save Failed - Slot %d", menu.slot + 1);
+		// User-facing slots are 1-100 (internal 0-99)
+		snprintf(msg, sizeof(msg), success ? "State Saved - Slot %d" : "Save Failed - Slot %d", attempted_slot + 1);
 		Notification_push(NOTIFICATION_SAVE_STATE, msg, NULL);
 	}
 }
@@ -1710,7 +1725,7 @@ void Menu_loadState(void) {
 		// Show notification if enabled
 		if (CFG_getNotifyLoad()) {
 			char msg[NOTIFICATION_MAX_MESSAGE];
-			// User-facing slots are 1-8 (internal 0-7)
+			// User-facing slots are 1-100 (internal 0-99)
 			snprintf(msg, sizeof(msg), success ? "State Loaded - Slot %d" : "Load Failed - Slot %d", menu.slot + 1);
 			Notification_push(NOTIFICATION_LOAD_STATE, msg, NULL);
 		}
@@ -1803,12 +1818,17 @@ void Menu_loop(void) {
 			if (selected>=MENU_ITEM_COUNT) selected -= MENU_ITEM_COUNT;
 			dirty = 1;
 		}
-		else if (PAD_justPressed(BTN_LEFT)) {
+		// LEFT/RIGHT: outer fires on press AND auto-repeat so save/load slot scrubbing
+		// can hold-to-scroll through 100 slots. Disc cycling guards with justPressed
+		// inside, so multi-disc games don't blur past when held.
+		else if (PAD_justRepeated(BTN_LEFT)) {
 			if (menu.total_discs>1 && selected==ITEM_CONT) {
-				menu.disc -= 1;
-				if (menu.disc<0) menu.disc += menu.total_discs;
-				dirty = 1;
-				sprintf(disc_name, "Disc %i", menu.disc+1);
+				if (PAD_justPressed(BTN_LEFT)) {
+					menu.disc -= 1;
+					if (menu.disc<0) menu.disc += menu.total_discs;
+					dirty = 1;
+					sprintf(disc_name, "Disc %i", menu.disc+1);
+				}
 			}
 			else if (selected==ITEM_SAVE || selected==ITEM_LOAD) {
 				menu.slot -= 1;
@@ -1816,12 +1836,14 @@ void Menu_loop(void) {
 				dirty = 1;
 			}
 		}
-		else if (PAD_justPressed(BTN_RIGHT)) {
+		else if (PAD_justRepeated(BTN_RIGHT)) {
 			if (menu.total_discs>1 && selected==ITEM_CONT) {
-				menu.disc += 1;
-				if (menu.disc==menu.total_discs) menu.disc -= menu.total_discs;
-				dirty = 1;
-				sprintf(disc_name, "Disc %i", menu.disc+1);
+				if (PAD_justPressed(BTN_RIGHT)) {
+					menu.disc += 1;
+					if (menu.disc==menu.total_discs) menu.disc -= menu.total_discs;
+					dirty = 1;
+					sprintf(disc_name, "Disc %i", menu.disc+1);
+				}
 			}
 			else if (selected==ITEM_SAVE || selected==ITEM_LOAD) {
 				menu.slot += 1;
@@ -1985,7 +2007,7 @@ void Menu_loop(void) {
 			// slot preview
 			if (selected==ITEM_SAVE || selected==ITEM_LOAD) {
 				#define WINDOW_RADIUS 4 // TODO: this logic belongs in blitRect?
-				#define PAGINATION_HEIGHT 6
+				#define PAGINATION_HEIGHT 14 // fits font.small "N/100" label
 				// unscaled
 				int hw = DEVICE_WIDTH / 2;
 				int hh = DEVICE_HEIGHT / 2;
@@ -1996,6 +2018,7 @@ void Menu_loop(void) {
 				
 				// window
 				GFX_blitRect(ASSET_STATE_BG, screen, &(SDL_Rect){ox,oy,pw,ph});
+				int window_ox = ox; // captured before mutation, used to center the pagination widget below
 				ox += SCALE1(WINDOW_RADIUS);
 				oy += SCALE1(WINDOW_RADIUS);
 				
@@ -2021,13 +2044,15 @@ void Menu_loop(void) {
 					else GFX_blitMessage(font.large, "Empty Slot", screen, &preview_rect);
 				}
 				
-				// pagination
-				ox += (pw-SCALE1(15*MENU_SLOT_COUNT))/2;
-				oy += hh+SCALE1(WINDOW_RADIUS);
-				for (int i=0; i<MENU_SLOT_COUNT; i++) {
-					if (i==menu.slot)GFX_blitAsset(ASSET_PAGE, NULL, screen, &(SDL_Rect){ox+SCALE1(i*15),oy});
-					else GFX_blitAsset(ASSET_DOT, NULL, screen, &(SDL_Rect){ox+SCALE1(i*15)+4,oy+SCALE1(2)});
-				}
+				// pagination: "‹ N/100 ›" centered under the preview window
+				// (black text on ASSET_STATE_BG, which is always white — see asset_rgbs)
+				char slot_label[24];
+				sprintf(slot_label, "‹  %d/%d  ›", menu.slot + 1, MENU_SLOT_COUNT);
+				SDL_Surface* slot_text = TTF_RenderUTF8_Blended(font.small, slot_label, COLOR_BLACK);
+				SDL_BlitSurface(slot_text, NULL, screen, &(SDL_Rect){
+					window_ox + (pw - slot_text->w) / 2,
+					oy + hh + SCALE1(WINDOW_RADIUS)});
+				SDL_FreeSurface(slot_text);
 			}
 			GFX_flip(screen);
 			dirty=0;
