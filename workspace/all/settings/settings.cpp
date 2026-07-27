@@ -495,7 +495,13 @@ int main(int argc, char *argv[])
         auto *appearanceMenu = new MenuList(MenuItemType::Fixed, "Appearance", std::move(appearanceItems));
 
         std::vector<AbstractMenuItem*> displayItems = {
-            new MenuItem{ListItemType::Generic, "Brightness", "Display brightness (0 to 10)", 0, 10, "",[]() -> std::any
+            new MenuItem{ListItemType::Generic, "Brightness",
+#if BRIGHTNESS_MIN < 0
+            "Display brightness (-5 to 10)\nNegative values dim below the minimum backlight.",
+#else
+            "Display brightness (0 to 10)",
+#endif
+            BRIGHTNESS_MIN, BRIGHTNESS_MAX, "",[]() -> std::any
             { return GetBrightness(); }, [](const std::any &value)
             { SetBrightness(std::any_cast<int>(value)); },
             []() { SetBrightness(SETTINGS_DEFAULT_BRIGHTNESS);}},
@@ -671,9 +677,15 @@ int main(int argc, char *argv[])
             []() -> std::any { return CFG_getMuteLEDs(); },
             [](const std::any &value) { CFG_setMuteLEDs(std::any_cast<bool>(value)); },
             []() { CFG_setMuteLEDs(CFG_DEFAULT_MUTELEDS); }},
+#if BRIGHTNESS_MIN < 0
+            new MenuItem{ListItemType::Generic, "Brightness when toggled", "Display brightness (-5 to 10)\nNegative values dim below the minimum backlight.",
+            {(int)SETTINGS_DEFAULT_MUTE_NO_CHANGE, -5,-4,-3,-2,-1,0,1,2,3,4,5,6,7,8,9,10},
+            {"Unchanged","-5","-4","-3","-2","-1","0","1","2","3","4","5","6","7","8","9","10"},
+#else
             new MenuItem{ListItemType::Generic, "Brightness when toggled", "Display brightness (0 to 10)",
             {(int)SETTINGS_DEFAULT_MUTE_NO_CHANGE, 0,1,2,3,4,5,6,7,8,9,10},
             {"Unchanged","0","1","2","3","4","5","6","7","8","9","10"},
+#endif
             []() -> std::any { return GetMutedBrightness(); }, [](const std::any &value)
             { SetMutedBrightness(std::any_cast<int>(value)); },
             []() { SetMutedBrightness(SETTINGS_DEFAULT_MUTE_NO_CHANGE);}},

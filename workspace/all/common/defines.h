@@ -5,7 +5,11 @@
 
 #define VOLUME_MIN 		0
 #define VOLUME_MAX 		20
+#ifdef HAS_EXTRA_DIM
+#define BRIGHTNESS_MIN 	-5 // negative levels are extra dim (backlight floor + gamma LUT)
+#else
 #define BRIGHTNESS_MIN 	0
+#endif
 #define BRIGHTNESS_MAX 	10
 #define COLORTEMP_MIN 	0
 #define COLORTEMP_MAX 	40

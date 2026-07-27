@@ -128,10 +128,19 @@ static int apply_gains(const DisplayCalGains *gains) {
 }
 
 int DisplayCal_enableWithValues(int red_gain, int green_gain, int blue_gain) {
+	return DisplayCal_enableWithValuesDimmed(red_gain, green_gain, blue_gain, 100);
+}
+
+int DisplayCal_enableWithValuesDimmed(int red_gain, int green_gain, int blue_gain, int dim_pct) {
+	if (dim_pct < 1)
+		dim_pct = 1;
+	if (dim_pct > 100)
+		dim_pct = 100;
+	double dim = dim_pct / 100.0;
 	DisplayCalGains gains = {
-		.red_gain = (double)DisplayCal_clampGainValue(red_gain) / DISPLAYCAL_GAIN_SCALE,
-		.green_gain = (double)DisplayCal_clampGainValue(green_gain) / DISPLAYCAL_GAIN_SCALE,
-		.blue_gain = (double)DisplayCal_clampGainValue(blue_gain) / DISPLAYCAL_GAIN_SCALE,
+		.red_gain = (double)DisplayCal_clampGainValue(red_gain) / DISPLAYCAL_GAIN_SCALE * dim,
+		.green_gain = (double)DisplayCal_clampGainValue(green_gain) / DISPLAYCAL_GAIN_SCALE * dim,
+		.blue_gain = (double)DisplayCal_clampGainValue(blue_gain) / DISPLAYCAL_GAIN_SCALE * dim,
 	};
 	return apply_gains(&gains);
 }

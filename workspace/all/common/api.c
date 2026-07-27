@@ -2236,12 +2236,17 @@ int GFX_blitHardwareIndicator(SDL_Surface *dst, int x, int y, IndicatorType indi
 		readonly = GetMute() && GetMutedVolume() != SETTINGS_DEFAULT_MUTE_NO_CHANGE;
 	}
 
+	// Extra-dim territory (negative brightness) gets an accent color so it
+	// reads as a different mode than regular backlight adjustment.
+#define EXTRA_DIM_COLOR 0x6a5acdffU
+	bool extra_dim = (indicator_type == INDICATOR_BRIGHTNESS && setting_value < 0);
+
 	// Draw the icon
 	SDL_Rect asset_rect;
 	GFX_assetRect(asset, &asset_rect);
 	int ax = ox + (SCALE1(PILL_SIZE) - asset_rect.w) / 2;
 	int ay = oy + (SCALE1(PILL_SIZE) - asset_rect.h) / 2;
-	GFX_blitAssetColor(asset, NULL, dst, &(SDL_Rect){ax, ay}, THEME_COLOR6_255);
+	GFX_blitAssetColor(asset, NULL, dst, &(SDL_Rect){ax, ay}, extra_dim ? EXTRA_DIM_COLOR : THEME_COLOR6_255);
 	
 	// Draw the progress bar background
 	ox += SCALE1(PILL_SIZE);
@@ -2263,11 +2268,21 @@ int GFX_blitHardwareIndicator(SDL_Surface *dst, int x, int y, IndicatorType indi
 		float percent = ((float)(setting_value - setting_min) / (setting_max - setting_min));
 		if (indicator_type == 1 || indicator_type == 3 || setting_value > 0)
 		{
-			if(!readonly)
+			if (extra_dim)
+				GFX_blitPillColor(ASSET_BAR, dst, &(SDL_Rect){ox, bar_y, SCALE1(SETTINGS_WIDTH) * percent, SCALE1(SETTINGS_SIZE)}, EXTRA_DIM_COLOR, RGB_WHITE);
+			else
 				GFX_blitPillDark(ASSET_BAR, dst, &(SDL_Rect){ox, bar_y, SCALE1(SETTINGS_WIDTH) * percent, SCALE1(SETTINGS_SIZE)});
 		}
 	}
-	
+
+	// Mark where the extra-dim zone ends on brightness bars that go below zero
+	if (indicator_type == INDICATOR_BRIGHTNESS && setting_min < 0 && !readonly)
+	{
+		int tick_x = ox + SCALE1(SETTINGS_WIDTH) * (0 - setting_min) / (setting_max - setting_min);
+		GFX_fillRectBlend(dst, &(SDL_Rect){tick_x, bar_y, SCALE1(2), SCALE1(SETTINGS_SIZE)},
+			SDL_MapRGBA(dst->format, 0, 0, 0, 0x99));
+	}
+
 	return ow;
 }
 

@@ -564,14 +564,25 @@ static inline void SaveSettings(void) {
 	}
 }
 
+// Applies calibration gains and extra dim (brightness < 0) as one gamma LUT.
 static inline void applyDisplayCalSettings(void) {
-	if (settings->displaycal_enabled)
-		SetRawDisplayCal(1, settings->displaycal_red_gain, settings->displaycal_green_gain, settings->displaycal_blue_gain);
+	int dim = DisplayCal_extraDimPercent(GetBrightness());
+	if (settings->displaycal_enabled || dim < 100) {
+		int cal = settings->displaycal_enabled;
+		DisplayCal_enableWithValuesDimmed(
+			cal ? settings->displaycal_red_gain : DISPLAYCAL_GAIN_SCALE,
+			cal ? settings->displaycal_green_gain : DISPLAYCAL_GAIN_SCALE,
+			cal ? settings->displaycal_blue_gain : DISPLAYCAL_GAIN_SCALE,
+			dim);
+	}
+	else {
+		SetRawDisplayCal(0, settings->displaycal_red_gain, settings->displaycal_green_gain, settings->displaycal_blue_gain);
+	}
 }
 
 ///////// Getters exposed in public API
 
-int GetBrightness(void) { // 0-10
+int GetBrightness(void) { // -5 to 10, negative = extra dim
 	if (settings->mute && GetMutedBrightness() != SETTINGS_DEFAULT_MUTE_NO_CHANGE)
 		return GetMutedBrightness();
 
@@ -713,11 +724,15 @@ int GetMuteTurboR2(void)
 ///////// Setters exposed in public API
 
 void SetBrightness(int value) {
-	if (settings->mute && GetMutedBrightness() != SETTINGS_DEFAULT_MUTE_NO_CHANGE)
-		return SetRawBrightness(scaleBrightness(GetMutedBrightness()));
+	if (settings->mute && GetMutedBrightness() != SETTINGS_DEFAULT_MUTE_NO_CHANGE) {
+		SetRawBrightness(scaleBrightness(GetMutedBrightness()));
+		applyDisplayCalSettings(); // GetBrightness() resolves to the muted value
+		return;
+	}
 
 	SetRawBrightness(scaleBrightness(value));
 	settings->brightness = value;
+	applyDisplayCalSettings();
 	SaveSettings();
 }
 void SetColortemp(int value) {
@@ -757,11 +772,10 @@ void SetDisplayCalEnabled(int is_enabled) {
 	is_enabled = (is_enabled != 0);
 	settings->displaycal_enabled = is_enabled;
 
-	// Disabling only needs hardware writes when we are turning an active LUT off.
-	if (is_enabled)
+	// Disabling only needs hardware writes when we are turning an active LUT
+	// off; applyDisplayCalSettings keeps the LUT up when extra dim is active.
+	if (is_enabled || was_enabled)
 		applyDisplayCalSettings();
-	else if (was_enabled)
-		SetRawDisplayCal(0, settings->displaycal_red_gain, settings->displaycal_green_gain, settings->displaycal_blue_gain);
 	SaveSettings();
 }
 void SetDisplayCalRedGain(int value) {
@@ -1054,6 +1068,7 @@ int scaleVolume(int value) {
 
 int scaleBrightness(int value) {
 	int raw;
+	if (value < 0) value = 0; // extra dim keeps the backlight at its floor
 	if (is_brick) {
 		switch (value) {
 			case 0: raw=1; break; 		// 0

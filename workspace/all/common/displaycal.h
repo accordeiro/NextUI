@@ -95,9 +95,26 @@ static inline int DisplayCal_clampGainValue(int value) {
 	return value;
 }
 
+// Extra dim: linear-light dim percent applied on top of the calibration gains
+// for brightness levels below zero. 100 = no dim. The steps were picked so each
+// level cuts perceived luminance roughly in half; tune on device.
+static inline int DisplayCal_extraDimPercent(int brightness) {
+	static const int dim_pct[] = {100, 55, 36, 22, 12, 6};
+	if (brightness >= 0)
+		return 100;
+	int level = -brightness;
+	if (level > 5)
+		level = 5;
+	return dim_pct[level];
+}
+
 // Apply the LUT using integer red, green, and blue gains in the 0-200 range.
 // A value of 100 is neutral.
 int DisplayCal_enableWithValues(int red_gain, int green_gain, int blue_gain);
+
+// Same, with all channels scaled by dim_pct (1-100) in linear light. The
+// multiply happens in the double domain so deep dim keeps the color balance.
+int DisplayCal_enableWithValuesDimmed(int red_gain, int green_gain, int blue_gain, int dim_pct);
 
 // Load the identity LUT, then disable gamma correction.
 int DisplayCal_disable(void);

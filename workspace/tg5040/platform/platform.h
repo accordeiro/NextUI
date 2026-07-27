@@ -126,6 +126,10 @@ extern int is_brickpro;
 
 ///////////////////////////////
 
+// brightness levels below 0 dim in software via the display gamma LUT
+// (needs /dev/disp; keymon must use a matching BRIGHTNESS_MIN)
+#define HAS_EXTRA_DIM 1
+
 #define BTN_RESUME			BTN_X
 #define BTN_SLEEP 			BTN_POWER
 #define BTN_WAKE 			BTN_POWER

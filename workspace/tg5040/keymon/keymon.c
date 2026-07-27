@@ -19,7 +19,7 @@
 
 #define VOLUME_MIN 		0
 #define VOLUME_MAX 		20
-#define BRIGHTNESS_MIN 	0
+#define BRIGHTNESS_MIN 	-5 // must match HAS_EXTRA_DIM range in common/defines.h
 #define BRIGHTNESS_MAX 	10
 #define COLORTEMP_MIN 	0
 #define COLORTEMP_MAX 	40
@@ -188,8 +188,8 @@ int main (int argc, char *argv[]) {
 		
 		if (up_just_pressed || (up_pressed && now>=up_repeat_at)) {
 			if (menu_pressed) {
-				val = GetBrightness();
-				if (val<BRIGHTNESS_MAX) SetBrightness(++val);
+				int bval = GetBrightness(); // signed, can go below zero
+				if (bval<BRIGHTNESS_MAX) SetBrightness(bval+1);
 			}
 			else if (menu2_pressed) {
 				val = GetColortemp();
@@ -208,8 +208,8 @@ int main (int argc, char *argv[]) {
 		
 		if (down_just_pressed || (down_pressed && now>=down_repeat_at)) {
 			if (menu_pressed) {
-				val = GetBrightness();
-				if (val>BRIGHTNESS_MIN) SetBrightness(--val);
+				int bval = GetBrightness(); // signed, can go below zero
+				if (bval>BRIGHTNESS_MIN) SetBrightness(bval-1);
 			}
 			else if (menu2_pressed) {
 				val = GetColortemp();
